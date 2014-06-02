@@ -39,65 +39,90 @@ function [dx, dy, dz, dt] = getDeltas(directory)
   dt = str2num(readFromIniFile('fluid', 'dt', [directory '/musta.cfg']));
 end
 
+function hubble = getHubbleConfig(directory)
+  hubble.e0 = str2num(readFromIniFile('hubble', 'e0', [directory '/theory/config.cfg']));
+  hubble.cs2 = str2num(readFromIniFile('hubble', 'cs2', [directory '/theory/config.cfg']));
+  hubble.tau0 = str2num(readFromIniFile('hubble', 'tau0', [directory '/theory/config.cfg']));
+end
+
 function nsteps = getNSteps(directory)
   nsteps = str2num(readFromIniFile('main', 'steps', [directory '/musta.cfg']));
 end
 
-function oneDimPlot()
+function [e,v] = calculateHubbleTheory(X, t, hubble)
+  e = hubble.e0 .* power(hubble.tau0./sqrt(t.*t-X.*X),3.*(1+hubble.cs2)) .* ( abs(X) <= t);
+  v = abs(X)./t .* ( abs(X)<=t );
+  % too large values are not necessary
+  oneone = (e >= 1);
+  e = e .* (e <= 1) + oneone;
+end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                                                  %
+%                                                                                                  %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+flowType = 'hubble';
+simCnt = 1;
+offset = 60;
+
+for j = 0:(simCnt-1)
+  directory{j+1} = ['/mnt/tesla/hubble' num2str(j+offset) 't0.02'];
+  fileNames{j+1} = ['h' num2str(j+offset)];
 end
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%                                                                                                  %
-%                                                                                                  %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-directory = [
-  '/mnt/tesla/hubble0' ;
-  '/mnt/tesla/hubble1' ;
-  '/mnt/tesla/hubble2'
-];
-
 fileNamePrefix = 'rel';
-topTitle = 'Relativistic 1D Sod shock problem - ';
+topTitle = 'Hubble flow - ';
 topTitle2 = ' distribution';
-plotLetters = 'neEv';
-legends = {'h0','h1','h2'};
+plotLetters = 'ev';
 
 global figureCounter = 1;
 global imagesDirectory = '../images';
 
-simulations = rows(directory);
+simulations = length(directory);
 for iSimulation = 1:simulations
-  theoryDirectory = [directory(iSimulation,:) '/theory'];
+  theoryDirectory = [directory{iSimulation} '/theory'];
 
-  [xDim, yDim, zDim] = getDimensions(directory(iSimulation,:));
-  [dx, dy, dz, dt] = getDeltas(directory(iSimulation,:));
-  tPoints = getNSteps(directory(iSimulation,:));
+  [xDim, yDim, zDim] = getDimensions(directory{iSimulation});
+  [dx, dy, dz, dt] = getDeltas(directory{iSimulation});
+  tPoints = getNSteps(directory{iSimulation});
+  plotTPoint = tPoints;
 
+  X = ((1:xDim) - xDim./2).*dx; % centering
+  if(flowType == 'hubble')
+    hubble = getHubbleConfig(directory{iSimulation});
+    [he, hv] = calculateHubbleTheory(X, (plotTPoint)*dt + 4, hubble);
+  end
 
   for i = 1:size(plotLetters)(2)
     varName = plotLetters(i);
-    evolutionTh.(varName) = zeros(simulations,tPoints,xDim);
-    evolution.(varName) = zeros(simulations,tPoints,xDim);
+    % evolutionTh.(varName) = zeros(simulations,tPoints,xDim);
+    % evolution.(varName) = zeros(simulations,tPoints,xDim);
 
-    evolutionTh.(varName)(iSimulation,:,:) = loadTheoreticalEvolution(theoryDirectory, varName, tPoints, xDim);
-    evolution.(varName)(iSimulation,:,:) = loadVariableEvolution(directory(iSimulation,:), varName, tPoints, xDim)
+    evolutionTh.(varName) = loadTheoreticalEvolution(theoryDirectory, varName, tPoints, xDim);
+    evolution.(varName) = loadVariableEvolution(directory{iSimulation}, varName, tPoints, xDim);
+
+    varName = plotLetters(i);
+    figure(figureCounter++);
+
+    if(flowType == 'hubble')
+      if(varName == 'e')
+        plot(X,evolution.(varName)(plotTPoint,:),'x',X,he,'-')
+        legend('simulation', 'theory')
+      elseif (varName == 'v')
+        plot(X,evolution.(varName)(plotTPoint,:),'x',X,hv,'-')
+        legend('simulation', 'theory')
+      else
+        plot(X,evolution.(varName)(plotTPoint,:),'x')
+      end
+    elseif(flowType == 'elliptic')
+      plot(X,evolution.(varName)(plotTPoint,:),'x')
+    else
+      plot(X,evolution.(varName)(plotTPoint,:),'x')
+    end
+    title([fileNames{iSimulation} ' ' topTitle varName topTitle2 ' t=' num2str((plotTPoint)*dt+4) 'fm - width=' num2str(xDim) ', dt=' num2str(dt)]);
+    ylabel(varName);
+    xlabel('x');
+    print([ imagesDirectory '/' fileNames{iSimulation} '_' fileNamePrefix '_' varName '_x' num2str(xDim) 'dt' num2str(dt) '.png'],'-S800,400');
+    % close;
   end
-
-
-end
-
-X = 1:xDim;
-for i = 1:size(plotLetters)(2)
-  varName = plotLetters(i);
-  figure(figureCounter++);
-  data = reshape(evolution.(varName)(:,tPoints,:),simulations, xDim);
-  data(1,:);
-  % plot(X(:),evolution.(varName)(tPoints,:),'x',X(:),evolutionTh.(varName)(tPoints,:),'-')
-  plot(data(2,:));
-  legend(legends)
-  title([topTitle varName topTitle2]);
-  ylabel(varName);
-  xlabel('x');
-  print([ imagesDirectory '/' fileNamePrefix '_' varName '.png'],'-S800,400');
 end
