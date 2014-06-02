@@ -1,8 +1,10 @@
 graphics_toolkit('gnuplot');
+clear all;
 
 function variableEvolution = loadVariableEvolution(directory, varName, tPoints, xPoints)
   variableEvolution = zeros(tPoints,xPoints);
-  for i = 1:tPoints
+  % temporary hack
+  for i = [1,tPoints]
     fileName = [directory '/data_' varName '_section_x_' int2str(i-1) '.dat'];
     if( exist(fileName) != 2 )
       % ['FILE DOES NOT EXIST ' fileName ]
@@ -15,7 +17,8 @@ end
 
 function variableEvolution = loadTheoreticalEvolution(directory, varName, tPoints, xPoints)
   variableEvolution = zeros(tPoints,xPoints);
-  for i = 1:tPoints
+  % temporary hack
+  for i = [1,tPoints]
     fileName = [directory '/theory_' varName '_' int2str(i-1) '.dat'];
     if( exist(fileName) != 2 )
       % ['FILE DOES NOT EXIST ' fileName ]
@@ -40,9 +43,9 @@ function [dx, dy, dz, dt] = getDeltas(directory)
 end
 
 function hubble = getHubbleConfig(directory)
-  hubble.e0 = str2num(readFromIniFile('hubble', 'e0', [directory '/theory/config.cfg']));
-  hubble.cs2 = str2num(readFromIniFile('hubble', 'cs2', [directory '/theory/config.cfg']));
-  hubble.tau0 = str2num(readFromIniFile('hubble', 'tau0', [directory '/theory/config.cfg']));
+  hubble.e0 = str2num(readFromIniFile('hubble', 'e0', [directory '/config.cfg']));
+  hubble.cs2 = str2num(readFromIniFile('hubble', 'cs2', [directory '/config.cfg']));
+  hubble.tau0 = str2num(readFromIniFile('hubble', 'tau0', [directory '/config.cfg']));
 end
 
 function nsteps = getNSteps(directory)
@@ -53,8 +56,8 @@ function [e,v] = calculateHubbleTheory(X, t, hubble)
   e = hubble.e0 .* power(hubble.tau0./sqrt(t.*t-X.*X),3.*(1+hubble.cs2)) .* ( abs(X) <= t);
   v = abs(X)./t .* ( abs(X)<=t );
   % too large values are not necessary
-  oneone = (e >= 1);
-  e = e .* (e <= 1) + oneone;
+  oneone = (e >= 4).*4;
+  e = e .* (e <= 4) + oneone;
 end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %                                                                                                  %
@@ -63,7 +66,8 @@ end
 
 flowType = 'hubble';
 simCnt = 1;
-offset = 60;
+offset = 61;
+initialConditionsTimeOffset = 4;
 
 for j = 0:(simCnt-1)
   directory{j+1} = ['/mnt/tesla/hubble' num2str(j+offset) 't0.02'];
@@ -76,7 +80,7 @@ topTitle2 = ' distribution';
 plotLetters = 'ev';
 
 global figureCounter = 1;
-global imagesDirectory = '../images';
+global imagesDirectory = './images';
 
 simulations = length(directory);
 for iSimulation = 1:simulations
@@ -90,7 +94,8 @@ for iSimulation = 1:simulations
   X = ((1:xDim) - xDim./2).*dx; % centering
   if(flowType == 'hubble')
     hubble = getHubbleConfig(directory{iSimulation});
-    [he, hv] = calculateHubbleTheory(X, (plotTPoint)*dt + 4, hubble);
+    [he, hv] = calculateHubbleTheory(X, (plotTPoint)*dt + initialConditionsTimeOffset, hubble);
+    [hie, hiv] = calculateHubbleTheory(X, initialConditionsTimeOffset, hubble); % initial
   end
 
   for i = 1:size(plotLetters)(2)
@@ -98,6 +103,9 @@ for iSimulation = 1:simulations
     % evolutionTh.(varName) = zeros(simulations,tPoints,xDim);
     % evolution.(varName) = zeros(simulations,tPoints,xDim);
 
+    evolutionInitialTh.(varName) = loadTheoreticalEvolution(theoryDirectory, varName, tPoints, xDim);
+    evolutionInitial.(varName) = loadVariableEvolution(directory{iSimulation}, varName, tPoints, xDim);
+    
     evolutionTh.(varName) = loadTheoreticalEvolution(theoryDirectory, varName, tPoints, xDim);
     evolution.(varName) = loadVariableEvolution(directory{iSimulation}, varName, tPoints, xDim);
 
@@ -106,11 +114,11 @@ for iSimulation = 1:simulations
 
     if(flowType == 'hubble')
       if(varName == 'e')
-        plot(X,evolution.(varName)(plotTPoint,:),'x',X,he,'-')
-        legend('simulation', 'theory')
+        plot(X,evolution.(varName)(plotTPoint,:),'x',X,he,'-',X,evolutionInitial.(varName)(1,:),'x',X,hie,'-')
+        legend('simulation', 'theory', 'simulation - initial', 'theory - initial')
       elseif (varName == 'v')
-        plot(X,evolution.(varName)(plotTPoint,:),'x',X,hv,'-')
-        legend('simulation', 'theory')
+        plot(X,evolution.(varName)(plotTPoint,:),'x',X,hv,'-',X,evolutionInitial.(varName)(1,:),'x',X,hiv,'-')
+        legend('simulation', 'theory', 'simulation - initial', 'theory - initial')
       else
         plot(X,evolution.(varName)(plotTPoint,:),'x')
       end
