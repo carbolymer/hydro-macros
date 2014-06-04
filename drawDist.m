@@ -53,11 +53,12 @@ function nsteps = getNSteps(directory)
 end
 
 function [e,v] = calculateHubbleTheory(X, t, hubble)
+  functionLimit = 3;
   e = hubble.e0 .* power(hubble.tau0./sqrt(t.*t-X.*X),3.*(1+hubble.cs2)) .* ( abs(X) <= t);
   v = abs(X)./t .* ( abs(X)<=t );
   % too large values are not necessary
-  oneone = (e >= 4).*4;
-  e = e .* (e <= 4) + oneone;
+  oneone = (e >= functionLimit).*functionLimit;
+  e = e .* (e <= functionLimit) + oneone;
 end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %                                                                                                  %
@@ -65,12 +66,12 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 flowType = 'hubble';
-simCnt = 1;
-offset = 61;
+simCnt = 70;
+offset = 0;
 initialConditionsTimeOffset = 4;
 
 for j = 0:(simCnt-1)
-  directory{j+1} = ['/mnt/tesla/hubble' num2str(j+offset) 't0.02'];
+  directory{j+1} = ['/mnt/tesla/hubble' num2str(j+offset) 't0.08'];
   fileNames{j+1} = ['h' num2str(j+offset)];
 end
 
@@ -80,7 +81,7 @@ topTitle2 = ' distribution';
 plotLetters = 'ev';
 
 global figureCounter = 1;
-global imagesDirectory = './images';
+global imagesDirectory = '../images';
 
 simulations = length(directory);
 for iSimulation = 1:simulations
