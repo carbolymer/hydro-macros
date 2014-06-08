@@ -42,6 +42,18 @@ function [dx, dy, dz, dt] = getDeltas(directory)
   dt = str2num(readFromIniFile('fluid', 'dt', [directory '/musta.cfg']));
 end
 
+function ellipsoidal = getEllipsoidalConfig(directory)
+  ellipsoidal.c_e = str2num(readFromIniFile('ellipsoidal', 'c_e', [directory '/config.cfg']));
+  ellipsoidal.c_n = str2num(readFromIniFile('ellipsoidal', 'c_n', [directory '/config.cfg']));
+  ellipsoidal.t0 = str2num(readFromIniFile('ellipsoidal', 't0', [directory '/config.cfg']));
+  ellipsoidal.t1 = str2num(readFromIniFile('ellipsoidal', 't1', [directory '/config.cfg']));
+  ellipsoidal.t2 = str2num(readFromIniFile('ellipsoidal', 't2', [directory '/config.cfg']));
+  ellipsoidal.t3 = str2num(readFromIniFile('ellipsoidal', 't3', [directory '/config.cfg']));
+  ellipsoidal.b_e = str2num(readFromIniFile('ellipsoidal', 'b_e', [directory '/config.cfg']));
+  ellipsoidal.b_n = str2num(readFromIniFile('ellipsoidal', 'b_n', [directory '/config.cfg']));
+  ellipsoidal.p_0 = str2num(readFromIniFile('ellipsoidal', 'p_0', [directory '/config.cfg']));
+end
+
 function hubble = getHubbleConfig(directory)
   hubble.e0 = str2num(readFromIniFile('hubble', 'e0', [directory '/config.cfg']));
   hubble.cs2 = str2num(readFromIniFile('hubble', 'cs2', [directory '/config.cfg']));
@@ -62,22 +74,55 @@ function [e,v] = calculateHubbleTheory(X, t, hubble)
   oneone = (e >= functionLimit).*functionLimit;
   e = e .* (e <= functionLimit) + oneone;
 end
+
+function [e,v] = calculateEllipsoidalTheory(X, t, ellipsoidal)
+  t = t + ellipsoidal.t0;
+  timePart = (t + ellipsoidal.t1).*(t + ellipsoidal.t2).*(t + ellipsoidal.t3);
+  tau_tilda2 = t.*t.*(1-X.*X./pow2(t - ellipsoidal.t1)); %!!!
+  e = -ellipsoidal.p_0 + ellipsoidal.c_e./timePart.*exp(-pow2(ellipsoidal.b_e)./tau_tilda2);
+  v = abs(X./(t+ellipsoidal.t1));
+
+  e = e .* (tau_tilda2 >= 0);
+  v = v .* (tau_tilda2 >= 0);
+  % v = v.* 1.1;
+end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %                                                                                                  %
 %                                                                                                  %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-flowType = 'hubble';
-timeIntevals = {'0.004', '0.006', '0.008', '0.01', '0.02', '0.04', '0.06', '0.08'};
-simCnt = 70;
-offset = 0;
-initialConditionsTimeOffset = 4;
+% <-- begin of config -->
+ 
+% 
+% available flow types:
+%   ellipsoidal
+%   hubble
+% 
+flowType = 'ellipsoidal';
+% flowType = 'hubble';
+timeIntervals = {
+    '0.004'
+    % '0.006',
+    % '0.008',
+    % '0.01',
+    % '0.02'
+    % '0.04'
+    % '0.06'
+    % '0.08'
+};
 
-for k = 1:length(timeIntevals)
+simCnt = 1;
+offset = 65;
+initialConditionsTimeOffset.('hubble') = 3.9;
+initialConditionsTimeOffset.('ellipsoidal') = 0.72;
+timeMultiplier.('hubble') = 1;
+timeMultiplier.('ellipsoidal') = 0.6;
+
+for k = 1:length(timeIntervals)
   for j = 0:(simCnt-1)
     % !!!! SCIEZKA Z WYNIKAMI SYMULACJI !!!!
-    directory{(k-1)*simCnt + j+1} = ['/mnt/tesla/hubble' num2str(j+offset) 't' timeIntevals{k}];
-    fileNames{(k-1)*simCnt + j+1} = ['h' num2str(j+offset)];
+    directory{(k-1)*simCnt + j+1} = ['/mnt/tesla/' flowType num2str(j+offset) 't' timeIntervals{k}];
+    fileNames{(k-1)*simCnt + j+1} = [flowType(1) num2str(j+offset)];
   end
 end
 fileNamePrefix = '';
@@ -85,12 +130,13 @@ topTitle = 'Hubble flow - ';
 topTitle2 = ' distribution';
 plotLetters = 'ev';
 
-global figureCounter = 1;
+global figureCounter = 1; % do not change
 global imagesDirectory = '../images';
 
 simulations = length(directory);
 for iSimulation = 1:simulations
   theoryDirectory = [directory{iSimulation} '/theory'];
+% <-- end of config -->
 
   [xDim, yDim, zDim] = getDimensions(directory{iSimulation});
   [dx, dy, dz, dt] = getDeltas(directory{iSimulation});
@@ -99,11 +145,15 @@ for iSimulation = 1:simulations
   % ['dx: ' num2str(dx)]
   % ['dt: ' num2str(dt)]
 
-  X = ((1:xDim) - xDim./2).*dx; % centering
-  if(flowType == 'hubble')
+  X = ((1:xDim) - xDim./2 - 1/2).*dx; % centering
+  if(strcmp(flowType, 'hubble'))
     hubble = getHubbleConfig(directory{iSimulation});
-    [he, hv] = calculateHubbleTheory(X, (plotTPoint)*dt + initialConditionsTimeOffset , hubble);
-    [hie, hiv] = calculateHubbleTheory(X, initialConditionsTimeOffset + dt, hubble); % initial
+    [he, hv] = calculateHubbleTheory(X, (plotTPoint.*timeMultiplier.(flowType))*dt + initialConditionsTimeOffset.('hubble') , hubble);
+    [hie, hiv] = calculateHubbleTheory(X, initialConditionsTimeOffset.('hubble')  + dt, hubble); % initial
+  elseif (strcmp(flowType, 'ellipsoidal'))
+    ellipsoidal = getEllipsoidalConfig(directory{iSimulation});
+    [ee, ev] = calculateEllipsoidalTheory(X, initialConditionsTimeOffset.('ellipsoidal') + (plotTPoint.*timeMultiplier.(flowType))*dt , ellipsoidal);
+    [eie, eiv] = calculateEllipsoidalTheory(X, initialConditionsTimeOffset.('ellipsoidal'), ellipsoidal); % initial
   end
 
   for i = 1:size(plotLetters)(2)
@@ -120,7 +170,7 @@ for iSimulation = 1:simulations
     varName = plotLetters(i);
     figure(figureCounter++);
 
-    if(flowType == 'hubble')
+    if(strcmp(flowType, 'hubble'))
       if(varName == 'e')
         plot(X,evolution.(varName)(plotTPoint,:),'x',X,he,'-',X,evolutionInitial.(varName)(1,:),'x',X,hie,'-')
         legend('simulation', 'theory', 'simulation - after 1st step', 'theory - after 1st step')
@@ -130,15 +180,23 @@ for iSimulation = 1:simulations
       else
         plot(X,evolution.(varName)(plotTPoint,:),'x')
       end
-    elseif(flowType == 'elliptic')
-      plot(X,evolution.(varName)(plotTPoint,:),'x')
+    elseif(strcmp(flowType, 'ellipsoidal'))
+      if(varName == 'e')
+        plot(X,evolution.(varName)(plotTPoint,:),'x', X,ee, '-', X,evolution.(varName)(1,:),'x', X, eie, '-')
+        legend('simulation', 'theory', 'simulation - after 1st step', 'theory - after 1st step')
+      elseif (varName == 'v')
+        plot(X,evolution.(varName)(plotTPoint,:),'x', X, ev, '-', X,evolution.(varName)(1,:),'x', X, eiv, '-')
+        legend('simulation', 'theory', 'simulation - after 1st step', 'theory - after 1st step')
+      else
+        plot(X,evolution.(varName)(plotTPoint,:),'x')
+      end
     else
       plot(X,evolution.(varName)(plotTPoint,:),'x')
     end
-    title([fileNames{iSimulation} ' ' topTitle varName topTitle2 ' t=' num2str((plotTPoint)*dt+initialConditionsTimeOffset) 'fm - width=' num2str(xDim) ', dt=' num2str(dt)]);
+    title([fileNames{iSimulation} ' ' topTitle varName topTitle2 ' t=' num2str((plotTPoint.*timeMultiplier.(flowType))*dt+initialConditionsTimeOffset.(flowType)) 'fm - width=' num2str(xDim) ', dt=' num2str(dt)]);
     ylabel(varName);
     xlabel('x');
     print([ imagesDirectory '/' fileNames{iSimulation} '_' fileNamePrefix '_' varName '_x' num2str(xDim) 'dt' num2str(dt) '.png'],'-S800,400');
-    close;
+    % close;
   end
 end
