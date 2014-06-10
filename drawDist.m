@@ -101,12 +101,12 @@ end
 flowType = 'ellipsoidal';
 % flowType = 'hubble';
 timeIntervals = {
-    '0.004'
+    % '0.004'
     % '0.006',
     % '0.008',
     % '0.01',
     % '0.02'
-    % '0.04'
+    '0.04'
     % '0.06'
     % '0.08'
 };
