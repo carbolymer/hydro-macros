@@ -98,7 +98,7 @@ end
 %   ellipsoidal
 %   hubble
 % 
-flowType = 'ellipsoidal';
+flowType = 'sod';
 % flowType = 'hubble';
 timeIntervals = {
     % '0.004'
@@ -115,13 +115,16 @@ simCnt = 1;
 offset = 65;
 initialConditionsTimeOffset.('hubble') = 3.9;
 initialConditionsTimeOffset.('ellipsoidal') = 0.72;
+initialConditionsTimeOffset.('sod') = 0;
 timeMultiplier.('hubble') = 1;
 timeMultiplier.('ellipsoidal') = 0.6;
+timeMultiplier.('sod') = 0.6;
 
 for k = 1:length(timeIntervals)
   for j = 0:(simCnt-1)
     % !!!! SCIEZKA Z WYNIKAMI SYMULACJI !!!!
-    directory{(k-1)*simCnt + j+1} = ['/mnt/tesla/' flowType num2str(j+offset) 't' timeIntervals{k}];
+    directory{(k-1)*simCnt + j+1} = '/mnt/tesla/sim1'; % SOD
+    % directory{(k-1)*simCnt + j+1} = ['/mnt/tesla/' flowType num2str(j+offset) 't' timeIntervals{k}];
     fileNames{(k-1)*simCnt + j+1} = [flowType(1) num2str(j+offset)];
   end
 end
@@ -131,7 +134,7 @@ topTitle2 = ' distribution';
 plotLetters = 'ev';
 
 global figureCounter = 1; % do not change
-global imagesDirectory = '../images';
+global imagesDirectory = './images';
 
 simulations = length(directory);
 for iSimulation = 1:simulations
@@ -161,6 +164,7 @@ for iSimulation = 1:simulations
     % evolutionTh.(varName) = zeros(simulations,tPoints,xDim);
     % evolution.(varName) = zeros(simulations,tPoints,xDim);
 
+    % if data inside theory/ folder exists, those functions are filling variables with theoretical distributions
     evolutionInitialTh.(varName) = loadTheoreticalEvolution(theoryDirectory, varName, tPoints, xDim);
     evolutionInitial.(varName) = loadVariableEvolution(directory{iSimulation}, varName, tPoints, xDim);
     
@@ -190,6 +194,9 @@ for iSimulation = 1:simulations
       else
         plot(X,evolution.(varName)(plotTPoint,:),'x')
       end
+    elseif(strcmp(flowType, 'sod'))
+      plot(X,evolution.(varName)(plotTPoint,:),'x', X,evolutionTh.(varName)(plotTPoint,:), '-', X, evolution.(varName)(1,:),'x', X, evolutionInitialTh.(varName)(1,:), '-')
+      legend('simulation', 'theory', 'simulation - after 1st step', 'theory - after 1st step')
     else
       plot(X,evolution.(varName)(plotTPoint,:),'x')
     end
