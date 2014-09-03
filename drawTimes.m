@@ -2,7 +2,6 @@ graphics_toolkit('gnuplot');
 clear all;
 
 
-dataCnt = 1;
 simNumber = 69;
 simulationsPath = '/mnt/tesla';
 

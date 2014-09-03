@@ -97,6 +97,7 @@ end
 % available flow types:
 %   ellipsoidal
 %   hubble
+%   sod
 % 
 flowType = 'sod';
 % flowType = 'hubble';
